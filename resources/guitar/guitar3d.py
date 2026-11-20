@@ -446,8 +446,10 @@ box("bridge plate", (0.034, 0.094, 0.003), (X_BRIDGE - 0.010, 0, TOP + 0.0015), 
 for s in range(7):
     y = string_y(s, X_BRIDGE)
     box("saddle %d" % s, (0.014, 0.0085, 0.013), (X_BRIDGE - 0.004, y, TOP + 0.0075), CHROME, bevel=0.0012)
-# a volume knob and the pickup switch
-if not HEADLESS:   # (the RG's knob and switch: off the window either way; a headless body is smaller there)
+# a volume knob and the pickup switch: 0.7.2 leaves them out (GUITAR_CONTROLS=1 puts them back). They sat off the window
+# until the 85% camera, which brings the switch's pearl tip into the bottom left corner, a bright speck on its own
+# there; PR7-A (headless) never had them.
+if not HEADLESS and os.environ.get("GUITAR_CONTROLS", "0") == "1":
     kx, ky = B(-62, -118)
     cylinder("knob", 0.010, 0.016, (kx, ky, TOP + 0.008), CHROME, verts=48)
     bpy.ops.mesh.primitive_torus_add(major_radius=0.0085, minor_radius=0.0006, location=(kx, ky, TOP + 0.0162))
@@ -552,7 +554,9 @@ cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 
 # GUITAR_NECK_Y=550.
 # 0.6.3: back to 0.4's full size at the owner's ask ("the bigger guitar looks a lot nicer"; the rack now hides): the
 # defaults 1 / 1560 / 550 again (0.5.0-0.6.2's smaller guitar: GUITAR_ZOOM=0.67 GUITAR_NUT_X=1090 GUITAR_NECK_Y=670).
-ZOOM = float(os.environ.get("GUITAR_ZOOM", "1"))
+# 0.7.2: 85% at the owner's ask, the same camera as PR7-A 0.4.2, so the two plugins' frets and notes line up exactly
+# (the nut stays at x 1560; 0.6.3-0.7.1's full size: GUITAR_ZOOM=1).
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "0.85"))
 VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1560"))
 VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", str(NECK_Y_1X)))
 VIEW_PX_PER_M = PX_PER_M * ZOOM

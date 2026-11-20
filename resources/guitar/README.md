@@ -47,3 +47,5 @@ with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the
 2. `GUITAR_OUTLINE=<out.json> blender -b -P guitar3d.py -- guitar.png 64 3200 1800` (~8 min), then
    `python3 process_guitar.py guitar.png guitar.jpg`. The neck, strings and frets don't move, so
    `guitar-geometry.json` stays the same.
+- **0.7.2, 85%:** `GUITAR_ZOOM` defaults to 0.85 (the same camera as PR7-A 0.4.2, so both plugins' fret maps are
+  identical); the RG's knob and switch are left out unless `GUITAR_CONTROLS=1` (at 85% the switch's tip showed).

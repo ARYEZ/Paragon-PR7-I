@@ -2,6 +2,16 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.7.2
+
+**The guitar at 85%, lined up with PR7-A.**
+
+- **85% size** (as PR7-A 0.4.2): more of the body shows beside the neck. The nut stays where it was; the frets sit a
+  little closer together. PR7-I and PR7-A now use exactly the same camera, so the nut, every fret, the strings and the
+  lit notes sit on the same spots in both: switching between them, only the body changes.
+- **The pickup switch and volume knob are gone from the picture.** At 85% the switch's pale tip landed alone in the
+  bottom left corner and caught the eye; PR7-A never had them either.
+
 ## 0.7.1
 
 **The A/B suite, and power chords that follow FORCE STRING.**
