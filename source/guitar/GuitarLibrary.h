@@ -30,6 +30,15 @@ namespace guitar
         juce::File file;
         float loudness = 0.0f;                         // 0.3.0: the RMS of its first 100 ms (to match levels when borrowed)
         static float loudnessOf (const std::vector<float>& head, double sampleRate);
+        // 0.7.3: where its pick is (seconds into the take; -1 unknown), as the A/B suite measures a pick: the first sample
+        // reaching a tenth of the peak of its first 150 ms. Playback starts so every pick lands the same time after the
+        // note-on (Guitar.h: pickLandSeconds).
+        double pickSeconds = -1.0;
+        static double pickOf (const std::vector<float>& head, double sampleRate);
+        // 0.7.3: a fingerprint of its 50 ms from the pick (exact copies of one recording share it), so the engine never
+        // plays the very same recording twice running on a string.
+        juce::uint64 fingerprint = 0;
+        static juce::uint64 fingerprintOf (const std::vector<float>& head, double sampleRate, double pickSeconds);
     };
 
     class Library

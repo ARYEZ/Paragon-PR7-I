@@ -65,7 +65,7 @@ namespace guitar
         int hand = 0;                  // 0 AUTO, else the hand's fret
         PickMode pick = PickMode::alternate;
         float velocityToVolume = 0.5f;
-        float releaseSeconds = 0.08f;
+        float releaseSeconds = 0.04f;  // 0.7.3: 40 ms (was 80): the reference's notes fall 20 dB 53 ms after a note-off
         float variation = 0.0f;        // 0 to 1
         KeyMap keyMap = KeyMap::split;
         int transpose = 0;
@@ -104,6 +104,12 @@ namespace guitar
     // notes now start 15 ms in (15 ms of the pick's lead-in kept, a 1 ms fade into it): the pick lands 15 ms after the
     // note-on, as theirs do.
     inline constexpr double takeStartSeconds = 0.015;
+    // 0.7.3: the A/B suite against the owner's reference (Jupiter at factory settings, November 2026): its picks land a
+    // steady 5.4 ms after every note-on; PR7-I's landed 4.6 ms after on sustain but 17 ms on palm mutes and power chords
+    // (up to 22 ms in repeated notes, with twice the spread), as imports cut each take a slightly different way before
+    // its pick. So each take's pick is found (Take::pickOf, the suite's own measure) and playback starts so it lands
+    // exactly this long after the note-on. takeStartSeconds is left for takes whose pick can't be found.
+    inline constexpr double pickLandSeconds = 0.0054;
 
     class Guitar
     {
@@ -186,7 +192,8 @@ namespace guitar
         Stroke nextStroke = Stroke::down;
         std::array<std::array<int, 2>, numArticulations> nextRoundRobin {};   // by articulation and stroke
         int articulationKey = keyswitch::c1;                                  // the articulation keyswitch latched
-        std::array<std::array<const Take*, 2>, numStrings> lastByStroke {};   // the take each stroke played last on each string
+        std::array<std::array<const Take*, 2>, numStrings> lastByStroke {};
+        std::array<const Take*, numStrings> lastOnString {};                  // 0.7.3: the take played last on each string   // the take each stroke played last on each string
         juce::Random random { 0x7072 };
         int ksForce = -2;           // -2: no keyswitch (the setting), -1: off, else a string
         int ksHand = -1;            // -1: no keyswitch, 0: AUTO, else a fret

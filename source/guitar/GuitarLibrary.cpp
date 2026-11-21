@@ -50,6 +50,8 @@ namespace guitar
                 take->stream = source;
             }
             take->loudness = Take::loudnessOf (take->head, take->sampleRate);
+            take->pickSeconds = Take::pickOf (take->head, take->sampleRate);
+            take->fingerprint = Take::fingerprintOf (take->head, take->sampleRate, take->pickSeconds);
             library->add (id->articulation, id->string, id->fret, id->layer, id->stroke, id->roundRobin, take);
         }
         // 0.6.0: the noises, whole in memory (unpitched and fret noises in the order they're numbered: played in turn).
@@ -102,12 +104,46 @@ namespace guitar
         return takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][stroke == Stroke::down ? 0u : 1u][(size_t) rr].get();
     }
 
+    double Take::pickOf (const std::vector<float>& head, double sampleRate)
+    {
+        const auto n = juce::jmin ((int) head.size(), (int) (0.15 * sampleRate));
+        auto peak = 0.0f;
+        for (int i = 0; i < n; ++i)
+            peak = juce::jmax (peak, std::abs (head[(size_t) i]));
+        if (peak < 1.0e-5f)
+            return -1.0;
+        for (int i = 0; i < n; ++i)
+            if (std::abs (head[(size_t) i]) >= 0.1f * peak)
+                return (double) i / sampleRate;
+        return -1.0;
+    }
+
+    juce::uint64 Take::fingerprintOf (const std::vector<float>& head, double sampleRate, double pickSeconds)
+    {
+        // FNV-1a over the samples (rounded to 16 bits) from the pick for 50 ms: exact copies match, different takes don't.
+        juce::uint64 h = 1469598103934665603ull;
+        const auto from = juce::jmax (0, (int) (juce::jmax (0.0, pickSeconds) * sampleRate));
+        const auto to = juce::jmin ((int) head.size(), from + (int) (0.05 * sampleRate));
+        for (int i = from; i < to; ++i)
+        {
+            const auto v = (juce::int16) juce::jlimit (-32768, 32767, juce::roundToInt (head[(size_t) i] * 32767.0f));
+            h = (h ^ (juce::uint64) (juce::uint16) v) * 1099511628211ull;
+        }
+        return h;
+    }
+
     void Library::add (Articulation a, int string, int fret, int layer, Stroke stroke, int roundRobin, std::shared_ptr<const Take> take)
     {
-        if (take != nullptr && take->loudness <= 0.0f)
+        if (take != nullptr && (take->loudness <= 0.0f || take->pickSeconds < 0.0))
         {
             auto measured = std::make_shared<Take> (*take);   // (takes made in memory: measured here)
-            measured->loudness = Take::loudnessOf (measured->head, measured->sampleRate);
+            if (measured->loudness <= 0.0f)
+                measured->loudness = Take::loudnessOf (measured->head, measured->sampleRate);
+            if (measured->pickSeconds < 0.0)
+            {
+                measured->pickSeconds = Take::pickOf (measured->head, measured->sampleRate);
+                measured->fingerprint = Take::fingerprintOf (measured->head, measured->sampleRate, measured->pickSeconds);
+            }
             take = measured;
         }
         takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u]

@@ -48,6 +48,7 @@ namespace guitar
         for (auto& n : noiseVoices)
             n = {};
         onString.fill (-1);
+        lastOnString.fill (nullptr);   // (0.7.3: a new library: its takes are new)
         for (int s = 0; s < numStrings; ++s)
         {
             soundingFret[(size_t) s] = -1;
@@ -292,8 +293,23 @@ namespace guitar
                     borrowedGain = chosen.gain;
                 }
             }
+            // 0.7.3: never the very same recording twice running on a string (the A/B suite caught a palm-muted low A
+            // playing one take twice in a row; the reference never does): the next round-robin instead.
+            if (found.take != nullptr && found.exact && library != nullptr)
+                if (const auto* prev = lastOnString[(size_t) p.string];
+                    prev != nullptr && (prev == found.take || (prev->fingerprint != 0 && prev->fingerprint == found.take->fingerprint)))
+                    for (int k = 1; k < renders::maxRoundRobins * 2; ++k)
+                    {
+                        const auto next = library->find (articulation, p.string, p.fret, layer, stroke, roundRobinFor (articulation) + k);
+                        if (next.take != nullptr && next.exact && next.take != prev && next.take->fingerprint != prev->fingerprint)
+                        {
+                            found = next;
+                            break;
+                        }
+                    }
             if (found.take == nullptr)
                 continue;
+            lastOnString[(size_t) p.string] = found.take;
             lastTake = found.take;
             lastTakePlayed = found.take;
             auto& v = freeVoice();
@@ -309,7 +325,9 @@ namespace guitar
             v.started = eventTime;
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
-            v.position = takeStartSeconds * found.take->sampleRate;
+            // 0.7.3: from just before the pick, so it lands pickLandSeconds after the note-on whatever the take's cut.
+            v.position = (found.take->pickSeconds >= 0.0 ? juce::jmax (0.0, found.take->pickSeconds - pickLandSeconds) : takeStartSeconds)
+                       * found.take->sampleRate;
             v.fadeIn = 0.0f;
             v.fadeInStep = (float) (1.0 / juce::jmax (1.0, 0.001 * rate));
             const auto ratio = (double) velocity / (double) renders::spec (articulation).velocities[(size_t) layer];
@@ -528,7 +546,9 @@ namespace guitar
         const auto gainFor = [&] (const Voice& v)
         {
             const auto held = (double) (eventTime - v.started) / rate;
-            const auto byLength = (float) juce::jlimit (0.0, 1.0, 2.0 - held);   // full to 1 s, none from 2 s
+            // 0.7.3: full to 0.5 s held, none from 1.25 s (the A/B suite: the reference's release noise ~19 dB under the
+            // note when held up to 0.5 s, ~4-23 dB weaker at 1 s, none at 1.5 s; 0.6.0 had full to 1 s, none from 2 s)
+            const auto byLength = (float) juce::jlimit (0.0, 1.0, (1.25 - held) / 0.75);
             return s.releaseNoise * byLength * (float) std::pow (juce::jmax (1, v.inputVelocity) / 85.0, 0.36);
         };
         auto played = false, powerDone = false;

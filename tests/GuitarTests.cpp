@@ -210,17 +210,20 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
     CHECK (followHand (1, 7, FretMode::polyphonic) == 3);
 }
 
-TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of down and up; keyswitches first; one file per string", "[guitar][renders]")
+TEST_CASE ("THE RENDER LIST: every fret, three dynamics, each stroke's two round-robins in a row (0.7.3: v2); keyswitches first; one file per string", "[guitar][renders]")
 {
     const auto list = renders::takes (Articulation::sustain, 0);
     REQUIRE (list.size() == 25 * 3 * 2 * 2);
     REQUIRE ((int) list.size() == Library::takesPerString (Articulation::sustain));
     CHECK_THAT (list.front().noteSeconds, WithinAbs (2.25, 1e-9));
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::spec (Articulation::sustain).slotSeconds, 1e-9));
-    CHECK (list[0].stroke == Stroke::down);
-    CHECK (list[1].stroke == Stroke::up);
-    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up: the two round-robins of each stroke
-    CHECK (list[2].roundRobin == 1);
+    CHECK (list[0].stroke == Stroke::down);   // 0.7.3, the v2 sustain lists: down 1, down 2, up 1, up 2
+    CHECK (list[1].stroke == Stroke::down);
+    CHECK (list[1].roundRobin == 1);
+    CHECK (list[2].stroke == Stroke::up);
+    CHECK (list[2].roundRobin == 0);
+    CHECK (list[3].stroke == Stroke::up);
+    CHECK (list[3].roundRobin == 1);
     CHECK (list[3].layer == 0);
     CHECK (list[4].layer == 1);
     CHECK (list.back().fret == 24);
@@ -228,8 +231,8 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of dow
     for (const auto& t : list)
         CHECK (t.velocity() <= 119);   // sustain's velocities (above: the reference's rake and pinch harmonic)
     CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 300 * 5.5, 1e-9));
-    CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain - String 7 (low A)");
-    CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain - String 4 (D)");
+    CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain v2 - String 7 (low A)");
+    CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain v2 - String 4 (D)");
 
     // The MIDI: the string forced (C-2 + string), legato off, then per take the articulation and stroke keys, the note.
     const auto midi = renders::toMidi (Articulation::sustain, 4);
@@ -765,7 +768,7 @@ TEST_CASE ("THE NOISES 0.6.0: a release at each note-off, by how long the note w
         CHECK (n.guitar.lastNoise().count == 0);
     }
 
-    SECTION ("Held a second: full; 1.5 s: half; 2 s or more: none (the reference played none after 2 s)")
+    SECTION ("Held 0.5 s: full; 1 s: a third; 1.25 s or more: none (0.7.3, the A/B suite)")
     {
         const auto gainAfter = [&] (double held)
         {
@@ -774,9 +777,11 @@ TEST_CASE ("THE NOISES 0.6.0: a release at each note-off, by how long the note w
             p.play (held + 0.2, { { Player::on (33, 85), 0 }, { Player::off (33), (int) (held * sampleRate) } });
             return p.guitar.lastNoise().count == 0 ? 0.0f : p.guitar.lastNoise().gain;
         };
+        // 0.7.3: full to 0.5 s, a third at 1 s, none from 1.25 s (the A/B suite against the reference)
         CHECK_THAT (gainAfter (0.1), Catch::Matchers::WithinAbs (1.0, 1e-3));
-        CHECK_THAT (gainAfter (1.0), Catch::Matchers::WithinAbs (1.0, 1e-3));
-        CHECK_THAT (gainAfter (1.5), Catch::Matchers::WithinAbs (0.5, 0.01));
+        CHECK_THAT (gainAfter (0.5), Catch::Matchers::WithinAbs (1.0, 0.01));
+        CHECK_THAT (gainAfter (1.0), Catch::Matchers::WithinAbs (1.0 / 3.0, 0.01));
+        CHECK (gainAfter (1.5) == 0.0f);
         CHECK (gainAfter (2.5) == 0.0f);
     }
 
@@ -1521,9 +1526,11 @@ TEST_CASE ("0.4.2: a note whose copies were left out plays the takes it has even
                 auto take = std::make_shared<Take>();
                 take->sampleRate = 8000.0;
                 for (int i = 0; i < 2400; ++i)
-                    take->head.push_back (0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 55.0 * i / 8000.0 + rr));
+                    take->head.push_back (0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 55.0 * i / 8000.0 + rr + (stroke == Stroke::up ? 10 : 0)));   // (0.7.3: ups other recordings than downs)
                 take->frames = (juce::int64) take->head.size();
                 take->loudness = 0.1f;   // (so the library keeps this very take, not a measured copy)
+                take->pickSeconds = 0.0;
+                take->fingerprint = Take::fingerprintOf (take->head, take->sampleRate, 0.0);
                 library->add (Articulation::mute, 0, 0, l, stroke, rr, take);
                 if (l == 1)
                     (stroke == Stroke::down ? downs : ups).push_back (take.get());
@@ -1713,46 +1720,94 @@ TEST_CASE ("Compare two renders of a riff", "[.][ab-compare]")
     SUCCEED();
 }
 
-TEST_CASE ("0.4.3: a note's pick lands 15 ms after its note-on (takes keep 30 ms before the pick; playback starts 15 ms in)", "[guitar][engine]")
+TEST_CASE ("0.7.3: every take's pick lands 5.4 ms after its note-on, wherever the take's cut put it", "[guitar][engine]")
 {
-    // A take as an import cuts it: quiet lead-in, the pick (a sharp step) exactly prerollSeconds in.
-    auto library = std::make_shared<Library>();
+    // Takes cut as imports cut them, but each with its pick a different distance in (10 to 40 ms: the A/B suite found
+    // palm mutes landing 17 ms late and sustain 4.6 ms, the reference a steady 5.4 ms).
     const auto rate = 48000.0;
-    for (int f = 0; f <= numFrets; ++f)
-        for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
-            for (const auto stroke : { Stroke::down, Stroke::up })
-                for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins; ++rr)
-                {
-                    auto take = std::make_shared<Take>();
-                    take->sampleRate = rate;
-                    const auto pick = (int) (renders::prerollSeconds * rate);
-                    for (int i = 0; i < (int) (0.5 * rate); ++i)
-                        take->head.push_back (i < pick ? 0.001f * (float) std::sin (i * 0.3) : 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 110.0 * (i - pick) / rate));
-                    take->frames = (juce::int64) take->head.size();
-                    take->loudness = 0.3f;
-                    library->add (Articulation::sustain, 2, f, l, stroke, rr, take);
-                }
+    for (const auto pickMs : { 10.0, 15.0, 30.0, 40.0 })
+    {
+        auto library = std::make_shared<Library>();
+        for (int f = 0; f <= numFrets; ++f)
+            for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
+                for (const auto stroke : { Stroke::down, Stroke::up })
+                    for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins; ++rr)
+                    {
+                        auto take = std::make_shared<Take>();
+                        take->sampleRate = rate;
+                        const auto pick = (int) (pickMs * 0.001 * rate);
+                        for (int i = 0; i < (int) (0.5 * rate); ++i)
+                            take->head.push_back (i < pick ? 0.001f * (float) std::sin (i * 0.3) : 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 110.0 * (i - pick) / rate));
+                        take->frames = (juce::int64) take->head.size();
+                        library->add (Articulation::sustain, 2, f, l, stroke, rr, take);
+                    }
+        Guitar g;
+        g.prepare (rate);
+        Settings s;
+        s.library = library.get();
+        s.keyMap = KeyMap::factory;
+        std::vector<float> l (4800, 0.0f), r (4800, 0.0f);
+        juce::MidiBuffer midi;
+        const auto noteAt = 1000;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 100), noteAt);
+        g.process (l.data(), r.data(), (int) l.size(), midi, 0, s);
+        auto pickAt = -1;
+        for (int i = 0; i < (int) l.size() && pickAt < 0; ++i)
+            if (std::abs (l[(size_t) i]) > 0.05f)
+                pickAt = i;
+        INFO ("pick " << pickMs << " ms into the take: heard at " << pickAt << ", the note-on at " << noteAt);
+        // (the sine's first sample over 0.05 comes a few samples after the step)
+        CHECK (pickAt - noteAt >= (int) (pickLandSeconds * rate));
+        CHECK (pickAt - noteAt <= (int) (pickLandSeconds * rate) + 8);
+        // nothing loud before the note begins (the pick, as the suite measures it, is its first sample at a tenth of its
+        // peak: here 7 samples into the 110 Hz sine): the lead-in faded in, no click
+        for (int i = noteAt; i < noteAt + (int) (pickLandSeconds * rate) - 8; ++i)
+            CHECK (std::abs (l[(size_t) i]) < 0.01f);
+    }
+}
+
+TEST_CASE ("0.7.3: never the very same recording twice running on a string", "[guitar][engine]")
+{
+    // A palm-muted note whose down and up takes include the same recording (an exact copy across strokes, which the
+    // import's copy check, per stroke, keeps): alternate picking must still never play it twice in a row.
+    auto library = std::make_shared<Library>();
+    const auto rate = 8000.0;
+    const auto make = [rate] (int which)
+    {
+        auto take = std::make_shared<Take>();
+        take->sampleRate = rate;
+        for (int i = 0; i < 2400; ++i)
+            take->head.push_back (0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 55.0 * i / rate + which));
+        take->frames = (juce::int64) take->head.size();
+        return take;
+    };
+    for (int l = 0; l < renders::spec (Articulation::mute).layers; ++l)
+    {
+        library->add (Articulation::mute, 0, 0, l, Stroke::down, 0, make (1));
+        library->add (Articulation::mute, 0, 0, l, Stroke::down, 1, make (2));
+        library->add (Articulation::mute, 0, 0, l, Stroke::up, 0, make (1));   // the same recording as down 1
+        library->add (Articulation::mute, 0, 0, l, Stroke::up, 1, make (3));
+    }
     Guitar g;
-    g.prepare (rate);
+    g.prepare (sampleRate);
     Settings s;
     s.library = library.get();
     s.keyMap = KeyMap::factory;
-    std::vector<float> l (4800, 0.0f), r (4800, 0.0f);
-    juce::MidiBuffer midi;
-    const auto noteAt = 1000;
-    midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 100), noteAt);
-    g.process (l.data(), r.data(), (int) l.size(), midi, 0, s);
-    auto pickAt = -1;
-    for (int i = 0; i < (int) l.size() && pickAt < 0; ++i)
-        if (std::abs (l[(size_t) i]) > 0.05f)
-            pickAt = i;
-    INFO ("the pick at " << pickAt << ", the note-on at " << noteAt);
-    // (the sine's first sample over 0.05 comes a few samples after the step)
-    CHECK (pickAt - noteAt >= (int) (takeStartSeconds * rate));
-    CHECK (pickAt - noteAt <= (int) (takeStartSeconds * rate) + 8);
-    // nothing loud before it: the lead-in faded in, no click
-    for (int i = noteAt; i < noteAt + (int) (takeStartSeconds * rate) - 2; ++i)
-        CHECK (std::abs (l[(size_t) i]) < 0.01f);
+    std::vector<float> l (blockSize), r (blockSize);
+    juce::MidiBuffer ks;
+    ks.addEvent (juce::MidiMessage::noteOn (1, 13, (juce::uint8) 100), 0);   // C#-1: palm mute
+    g.process (l.data(), r.data(), blockSize, ks, 0, s);
+    std::vector<juce::uint64> played;
+    for (int i = 0; i < 24; ++i)
+    {
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 33, (juce::uint8) 38), 0);
+        g.process (l.data(), r.data(), blockSize, midi, 0, s);
+        played.push_back (g.lastTake()->fingerprint);
+    }
+    for (size_t i = 1; i < played.size(); ++i)
+        CHECK (played[i] != played[i - 1]);
+    CHECK (std::set<juce::uint64> (played.begin(), played.end()).size() == 3);   // every recording still played
 }
 
 // PARAGON_AB_SUITE_MIDI=<tools/ab-suite's MIDI file> ./GuitarCoreTests "[ab-suite]": plays the A/B suite through the

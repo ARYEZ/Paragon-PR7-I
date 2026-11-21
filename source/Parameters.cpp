@@ -69,7 +69,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     add (layout, handPosition, "Hand Position", { 0.0f, (float) ParamRanges::maxHand, 1.0f }, 0.0f,
          [] (float v, int) { const auto f = juce::roundToInt (v); return f == 0 ? juce::String ("Auto") : "Fret " + juce::String (f); });
     add (layout, velocityToVolume, "Vel > Vol", { 0.0f, 1.0f, 0.01f }, 0.5f, asPercent);
-    add (layout, release, "Release", { 0.005f, 0.5f, 0.001f, 0.5f }, 0.08f,
+    add (layout, release, "Release", { 0.005f, 0.5f, 0.001f, 0.5f }, 0.04f,
          [] (float s, int) { return juce::String (juce::roundToInt (s * 1000.0f)) + " ms"; });
     add (layout, transpose, "Transpose", { -12.0f, 12.0f, 1.0f }, 0.0f,
          [] (float v, int) { const auto st = juce::roundToInt (v); return (st > 0 ? "+" : "") + juce::String (st) + " st"; });

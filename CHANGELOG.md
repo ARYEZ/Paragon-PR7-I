@@ -2,6 +2,29 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.7.3
+
+Fixes from the first A/B suite comparison: your guitar instrument (at factory settings) and PR7-I playing the same
+428 notes, measured note by note. Levels, tone and pitch already matched within about 1 dB and a few cents; these
+are the differences it found.
+
+- **Picks land on time, every take.** The reference's picks land a steady 5.4 ms after each note-on. PR7-I's landed
+  4.6 ms after on sustain but 17 ms on palm mutes and power chords (up to 22 ms in repeated notes), and wandered twice
+  as much from hit to hit, because each imported take had a slightly different stretch before its pick. PR7-I now finds
+  the pick in every take (the same way the suite measures it) and starts each note so the pick lands exactly 5.4 ms
+  after the note-on. Tighter chugs; nothing to re-import.
+- **Never the same recording twice in a row on a string.** A palm-muted low A played one take twice running (the
+  reference never does). If the next take in turn is the very recording just played, the one after it plays instead.
+- **Note endings like the reference.** RELEASE's default is 40 ms (was 80): the reference's notes fall 20 dB within
+  about 50 ms of the note-off. Projects and presets keep the RELEASE they were saved with. Release noises now play in
+  full for notes held up to half a second, a third at one second, and none from 1.25 s (the reference: none at 1.5 s;
+  PR7-I had them up to 2 s).
+- **New sustain lists, "v2"**: each note's two down takes in a row, then its two ups, as the palm-mute v2 lists already
+  do. The first sustain lists alternated down, up, down, up, and alternating makes your guitar instrument hand back the
+  same take, so PR7-I kept only one sustain take a stroke: the suite heard repeated low-A sustains alternate just two
+  recordings. Same length as before (about 28 minutes a string). Render the seven "PR7-I Sustain v2" lists and import
+  them; renders of the old sustain lists won't import right into the new layout.
+
 ## 0.7.2
 
 **The guitar at 85%, lined up with PR7-A.**

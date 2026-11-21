@@ -150,8 +150,8 @@ void RendersPage::showArticulation (guitar::Articulation a)
                         "map, effects off, one guitar, no anti-repetition, ringing or release noises), then import the audio. Each "
                         "string: 25 frets x " + juce::String (spec.layers) + (a == guitar::Articulation::mute ? " degrees of muting" : " dynamics")
                         + " x " + juce::String (spec.roundRobins) + " takes of each stroke, about " + juce::String (minutes) + " minutes."
-                        + (a == guitar::Articulation::mute ? juce::String (" Use the v2 lists (each note's downs in a row, then its ups: more different palm mutes); "
-                                                                          "renders of the first lists won't import right.") : juce::String()),
+                        + juce::String (" Use the v2 lists (each note's downs in a row, then its ups: more different takes); "
+                                        "renders of the first lists won't import right."),
                         juce::dontSendNotification);
     for (auto& row : rows)
         row->refresh();
