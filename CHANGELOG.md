@@ -2,6 +2,20 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.7.5
+
+From the second A/B suite comparison (with your re-rendered sustain v2 takes and every noise imported):
+
+- **Short notes ring on a moment, as the reference's do.** A note let go within about 1.2 seconds of its start keeps
+  sounding at nearly full level for about 0.15 s after the note-off, then stops; a note held longer damps at once (as
+  0.7.3 matched). The reference does exactly this (0.15-0.2 s, then a sharp stop), and PR7-I had faded every note
+  straight away, so short notes, chugs, palm mutes and power chords ended about 40 ms early. The next note on the same
+  string still cuts a ringing note at once, so fast riffs stay tight.
+
+What the comparison showed already matching: picks now land within about 1 ms of the reference's on sustain (palm
+mutes within 3 ms, from 12 ms late), repeated sustained notes use 8 different takes over 24 hits (the reference 10; PR7-I
+had 3), long notes end like the reference's, fret noise is there at the reference's level.
+
 ## 0.7.4
 
 - **Unpitched noises import, and play the reference's way.** Your guitar instrument plays its unpitched release (a scrape

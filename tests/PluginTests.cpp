@@ -28,8 +28,8 @@ namespace
     struct Plugin
     {
         ParagonX1AudioProcessor p;
-        juce::File folder = temp ("Plugin");
-        Plugin()
+        juce::File folder;
+        explicit Plugin (const juce::String& name = "Plugin") : folder (temp (name))   // (0.7.5: two at once need two folders)
         {
             p.useRigFolder (folder.getChildFile ("Rigs"));
             p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
@@ -493,21 +493,29 @@ TEST_CASE ("THE NOISES 0.6.0: a release render imported from its NOISES row, pla
     CHECK (t.p.getLibrary()->noiseCount (guitar::noises::List::pitchedRelease, 0) == 25);
     CHECK (guitarFolder.getChildFile ("Release/s0_f12_r0.wav").existsAsFile());
 
-    // Played: the low A held, then let go: its release at the note-off; none with RELEASE NOISE off. (Measured 50-200 ms
-    // after the note-off at the low A's pitch, with RELEASE at 10 ms: the note itself gone by then, its release not.)
-    t.p.setParameterNow (ParamIDs::release, 0.01f);
-    const auto releaseLevel = [&t]
+    // Played: the low A held, then let go: its release at the note-off; none with RELEASE NOISE off. (0.7.5: a short
+    // note rings on 0.15 s after its note-off, so the release is measured as the difference between this plugin and a
+    // second one on the same folder with RELEASE NOISE off, played the same way: the notes cancel, the release is left.)
+    Plugin quiet ("Quiet plugin");
+    quiet.p.setGuitarFolder (guitarFolder);
+    REQUIRE (quiet.p.waitUntilIdle (60000));
+    quiet.p.setParameterNow (ParamIDs::releaseNoise, ParamRanges::noiseMinDb);
+    CHECK (quiet.p.getGuitarSettings().releaseNoise == 0.0f);
+    const auto played = [] (Plugin& x)
     {
-        t.play (1, { { 33, 100 } });
-        t.play (20);
-        const auto out = t.play (40, { { 33, 0 } });
-        t.play (60);
-        return levelAt (out, 55.0, (size_t) (0.05 * sampleRate), (size_t) (0.15 * sampleRate));
+        x.p.setParameterNow (ParamIDs::release, 0.01f);
+        x.play (1, { { 33, 100 } });
+        x.play (20);
+        auto out = x.play (40, { { 33, 0 } });
+        x.play (60);
+        return out;
     };
-    CHECK (releaseLevel() > 0.004);   // (~0.012 rendered, through OUTPUT's -6 dB default)
-    t.p.setParameterNow (ParamIDs::releaseNoise, ParamRanges::noiseMinDb);
-    CHECK (t.p.getGuitarSettings().releaseNoise == 0.0f);
-    CHECK (releaseLevel() < 0.001);
+    const auto with = played (t), without = played (quiet);
+    std::vector<float> difference (with.size());
+    for (size_t i = 0; i < with.size(); ++i)
+        difference[i] = with[i] - without[i];
+    CHECK (levelAt (difference, 55.0, (size_t) (0.05 * sampleRate), (size_t) (0.15 * sampleRate)) > 0.004);   // (~0.012 rendered, through OUTPUT's -6 dB)
+    CHECK (rms (without, (size_t) (0.4 * sampleRate), without.size()) < 1.0e-4);   // and without it, silence once the ring is over
 
     // The pages: RENDERS' NOISES row says what came in; the rack's NOISES page shows its three knobs and what's imported.
     std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());

@@ -113,6 +113,11 @@ namespace guitar
     // 0.7.4: the reference's Unpitched Release window at factory settings (the owner's screenshot): it plays on a note let
     // go 51 to 1173 ms after it started.
     inline constexpr double unpitchedFromSeconds = 0.051, unpitchedToSeconds = 1.173;
+    // 0.7.5: the second A/B suite: the reference's notes let go within about 1.17 s of their start ring on at nearly full
+    // level for ~0.15-0.2 s after the note-off and then stop sharply; notes held longer damp at once (PR7-I's RELEASE, which
+    // matches them). So a note let go up to letRingUpToSeconds after it started rings letRingSeconds before its fade
+    // (the next note on its string fades it at once).
+    inline constexpr double letRingSeconds = 0.15, letRingUpToSeconds = 1.173;
 
     class Guitar
     {
@@ -172,6 +177,7 @@ namespace guitar
             bool palmMuted = false;                    // 0.6.0: played as a palm mute (no release)
             int inputVelocity = 100;                   // 0.6.0: as played (the release's level)
             juce::int64 started = 0;                   // 0.6.0: when (the engine's sample count: how long it was held)
+            int ringLeft = 0;                          // 0.7.5: samples it rings on at full level before its release fade
         };
         std::array<Voice, maxVoices> voices {};
         struct NoiseVoice

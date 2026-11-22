@@ -110,6 +110,7 @@ namespace guitar
         if (v.held && v.string >= 0 && onString[(size_t) v.string] == (int) (&v - voices.data()))
             onString[(size_t) v.string] = -1;
         v.held = false;
+        v.ringLeft = 0;
         const auto step = (float) (1.0 / juce::jmax (1.0, seconds * rate));
         v.fadeStep = juce::jmax (v.fadeStep, step);
     }
@@ -168,7 +169,12 @@ namespace guitar
             releaseNoises (note, s);
             for (auto& v : voices)
                 if (v.active && v.held && v.sourceNote == note)
+                {
+                    const auto held = (double) (eventTime - v.started) / rate;
                     stopVoice (v, s.releaseSeconds);
+                    if (held <= letRingUpToSeconds)
+                        v.ringLeft = (int) (letRingSeconds * rate);   // 0.7.5: a short note rings on a moment, as the reference's
+                }
         }
         else if (m.isAllNotesOff() || m.isAllSoundOff())
         {
@@ -253,6 +259,9 @@ namespace guitar
             last = p;
             if (const auto old = onString[(size_t) p.string]; old >= 0)
                 stopVoice (voices[(size_t) old], stopSeconds);
+            for (auto& rung : voices)   // 0.7.5: a let-go note still ringing on this string starts its fade now
+                if (rung.active && ! rung.held && rung.string == p.string)
+                    rung.ringLeft = 0;
             auto articulation = chord.articulations[i];
             auto velocity = chord.velocities[i];
             auto layer = renders::layerFor (articulation, velocity);
@@ -399,7 +408,9 @@ namespace guitar
             left[i] += out;
             right[i] += out;
             v.position += v.step;
-            if (v.fadeStep > 0.0f && (v.fade -= v.fadeStep) <= 0.0f)
+            if (v.ringLeft > 0)
+                --v.ringLeft;
+            else if (v.fadeStep > 0.0f && (v.fade -= v.fadeStep) <= 0.0f)
             {
                 v.active = false;
                 break;

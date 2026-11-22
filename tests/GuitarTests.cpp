@@ -383,15 +383,15 @@ TEST_CASE ("THE ENGINE: notes on their strings at their pitch; one note per stri
     CHECK (levelAt (p.left, 110.0, from, 9600) > 0.2);
     CHECK (p.guitar.getSounding (0).fret == 5);
 
-    // NOTE-OFF: the string damped over RELEASE (80 ms), the others left ringing.
+    // NOTE-OFF: the string damped over RELEASE (0.7.5: after ringing on 0.15 s, this short note), the others left ringing.
     p.left.clear();
-    p.play (0.3, { { Player::off (38), 0 } });
+    p.play (0.45, { { Player::off (38), 0 } });
     CHECK (rms (p.left, 6000, 14000) > 0.1);                     // the A string still
-    CHECK (levelAt (p.left, guitar::frequencyOf (38), 6000, 8000) < 0.005);
+    CHECK (levelAt (p.left, guitar::frequencyOf (38), 12000, 8000) < 0.005);
     CHECK (p.guitar.getSounding (0).fret == -1);
     p.left.clear();
-    p.play (0.2, { { Player::off (45), 0 } });
-    CHECK (rms (p.left, 6000, 9600) < 1.0e-4);
+    p.play (0.35, { { Player::off (45), 0 } });
+    CHECK (rms (p.left, 12000, 16000) < 1.0e-4);
     CHECK (p.guitar.getActiveVoices() == 0);
 }
 
@@ -1908,4 +1908,30 @@ TEST_CASE ("Play the A/B suite through the engine", "[.][ab-suite]")
         w->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
     }
     CHECK (csv.size() > 400);
+}
+
+TEST_CASE ("0.7.5: a note let go within 1.17 s rings on ~0.15 s, then damps; a longer one damps at once; a re-pick cuts the ring", "[guitar][engine]")
+{
+    // The low A, 55 Hz in the tone guitar, held for `held` seconds, then its level 0.05-0.10 s and 0.25-0.30 s after the note-off.
+    const auto after = [] (double held, bool repick = false)
+    {
+        Player p;
+        p.settings.forceString = 0;   // (everything on the low A)
+        std::vector<std::pair<juce::MidiMessage, int>> events { { Player::on (33, 90), 0 }, { Player::off (33), (int) (held * sampleRate) } };
+        if (repick)   // the low A's 12th fret (an octave up: easy to tell apart), 20 ms after the note-off
+            events.push_back ({ Player::on (45, 90), (int) ((held + 0.02) * sampleRate) });
+        p.play (held + 0.5, events);
+        const auto off = (size_t) (held * sampleRate);
+        return std::pair { levelAt (p.left, 55.0, off + (size_t) (0.07 * sampleRate), (size_t) (0.06 * sampleRate)),
+                           levelAt (p.left, 55.0, off + (size_t) (0.25 * sampleRate), (size_t) (0.06 * sampleRate)) };
+    };
+    const auto [shortEarly, shortLate] = after (0.3);
+    CHECK (shortEarly > 0.15);            // still ringing at nearly its full level (0.25 x 90/45 here: ~0.2-0.25)
+    CHECK (shortLate < 0.01);             // gone by a quarter second
+    const auto [longEarly, longLate] = after (1.5);
+    CHECK (longEarly < 0.02);             // RELEASE's 40 ms fade, at once
+    CHECK (longLate < 0.01);
+    const auto [cutEarly, cutLate] = after (0.3, true);
+    CHECK (cutEarly < 0.02);              // the next note on its string faded it at once
+    (void) cutLate;
 }
