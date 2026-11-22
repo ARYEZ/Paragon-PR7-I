@@ -399,6 +399,20 @@ TEST_CASE ("0.2.2: VARIATION off by default, and in projects and presets saved b
     rigXml->setAttribute ("parameterVersion", 1);
     CHECK (Rig::fromXml (*rigXml)->parameters.at (ParamIDs::variation) == 0.0f);
     CHECK (Rig::fromXml (*rig.toXml())->parameters.at (ParamIDs::variation) == 0.5f);
+
+    // 0.7.4: a preset saved before it with RELEASE and SCRAPES at the old defaults (80 ms, 12%) gets the new ones (40 ms,
+    // 100%); a value set by hand stays.
+    Rig oldRig;
+    oldRig.parameters[ParamIDs::release] = 0.08f;
+    oldRig.parameters[ParamIDs::scrapes] = 0.12f;
+    auto oldRigXml = oldRig.toXml();
+    oldRigXml->setAttribute ("parameterVersion", 2);
+    CHECK_THAT (Rig::fromXml (*oldRigXml)->parameters.at (ParamIDs::release), Catch::Matchers::WithinAbs (0.04, 1e-6));
+    CHECK_THAT (Rig::fromXml (*oldRigXml)->parameters.at (ParamIDs::scrapes), Catch::Matchers::WithinAbs (1.0, 1e-6));
+    oldRig.parameters[ParamIDs::release] = 0.02f;
+    oldRigXml = oldRig.toXml();
+    oldRigXml->setAttribute ("parameterVersion", 2);
+    CHECK_THAT (Rig::fromXml (*oldRigXml)->parameters.at (ParamIDs::release), Catch::Matchers::WithinAbs (0.02, 1e-6));
 }
 
 TEST_CASE ("PALM MUTE 0.3.0: a palm-mute render imported into Mute; played palm-muted by the owner's split map; KEY MAP", "[plugin]")

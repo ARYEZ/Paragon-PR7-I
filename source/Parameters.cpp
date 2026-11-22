@@ -89,7 +89,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         return db <= ParamRanges::noiseMinDb + 0.05f ? juce::String ("Off") : (db > 0.05f ? "+" : "") + juce::String (db, 1) + " dB";
     };
     add (layout, releaseNoise, "Release Noise", { ParamRanges::noiseMinDb, ParamRanges::noiseMaxDb, 0.1f }, 0.0f, noiseLevel, v060);
-    add (layout, scrapes, "Scrapes", { 0.0f, 1.0f, 0.01f }, 0.12f, asPercent, v060);
+    add (layout, scrapes, "Scrapes", { 0.0f, 1.0f, 0.01f }, 1.0f, asPercent, v060);   // (0.7.4: 100%, was 12%)
     add (layout, fretNoise, "Fret Noise", { ParamRanges::noiseMinDb, ParamRanges::noiseMaxDb, 0.1f }, 0.0f, noiseLevel, v060);
     return layout;
 }

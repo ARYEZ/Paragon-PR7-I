@@ -1,11 +1,13 @@
 #include "PluginProcessor.h"
+#include <tuple>
 #include "PluginEditor.h"
 
 namespace
 {
     const juce::Identifier rigNameKey { "rigName" }, rigFileKey { "rigFile" }, rigFactoryKey { "rigFactory" },
                            rigModifiedKey { "rigModified" }, guitarFolderKey { "guitarFolder" }, stateVersionKey { "stateVersion" };
-    constexpr int stateVersion = 2;   // 2: PR7-I 0.2.2 (older projects: VARIATION off, as 0.2.1's 50% was never chosen)
+    constexpr int stateVersion = 3;   // 2: PR7-I 0.2.2 (older projects: VARIATION off, as 0.2.1's 50% was never chosen)
+                                      // 3: PR7-I 0.7.4 (RELEASE 80 ms -> 40, SCRAPES 12% -> 100%, where still the old defaults)
     constexpr double retiredMs = 2000.0;
 }
 
@@ -758,6 +760,15 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     if (savedVersion < 2)
         if (auto* p = parameters.getParameter (ParamIDs::variation))
             p->setValueNotifyingHost (0.0f);
+    if (savedVersion < 3)
+    {
+        // 0.7.3 / 0.7.4, the A/B suite against the reference: the old defaults moved to the reference's (a value set by
+        // hand stays as it was).
+        for (const auto& [id, oldDefault, newDefault] : { std::tuple { ParamIDs::release, 0.08f, 0.04f }, std::tuple { ParamIDs::scrapes, 0.12f, 1.0f } })
+            if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (parameters.getParameter (id)))
+                if (std::abs (p->convertFrom0to1 (p->getValue()) - oldDefault) < 1.0e-4f)
+                    p->setValueNotifyingHost (p->convertTo0to1 (newDefault));
+    }
 
     // THE GUITAR: the project's folder (as it was saved), not necessarily the one chosen last.
     if (juce::File::isAbsolutePath (folder) && juce::File (folder) != getGuitarFolder())

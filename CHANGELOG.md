@@ -2,6 +2,17 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.7.4
+
+- **Unpitched noises import, and play the reference's way.** Your guitar instrument plays its unpitched release (a scrape
+  as the finger leaves the string) on **every** note let go between 51 and 1173 ms after it started (its Unpitched
+  Release page at factory settings). PR7-I had guessed "now and then" (12%) and so refused your render, which rightly
+  had a scrape on every hit. The import now takes a scrape on every hit (and still refuses a render where the noises
+  sound at their notes' pitch: Pitched Release left on); the engine plays the next scrape in turn on every note let
+  go in that window, whether or not a pitched release plays. SCRAPES is now 100% by default.
+- **Old projects and presets** saved with RELEASE at 80 ms or SCRAPES at 12% (the old defaults) now open with 40 ms and
+  100%. A value you set yourself stays as it was.
+
 ## 0.7.3
 
 Fixes from the first A/B suite comparison: your guitar instrument (at factory settings) and PR7-I playing the same

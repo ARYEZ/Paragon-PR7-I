@@ -75,7 +75,7 @@ namespace guitar
         bool mono = false;             // 0.4.0: one note at a time
         float attack = 0.0f;           // 0.4.0: 0 to 1, each note's first milliseconds louder
         float releaseNoise = 1.0f;     // 0.6.0: the releases' gain (0: none)
-        float scrapes = 0.12f;         // 0.6.0: the chance a release has an unpitched noise mixed in
+        float scrapes = 1.0f;          // 0.6.0: the chance a let-go note has its unpitched noise (0.7.4: 100%, the reference's way)
         float fretNoise = 1.0f;        // 0.6.0: fret noise's gain (0: none)
         const Library* library = nullptr;
         Streamer* streamer = nullptr;
@@ -110,6 +110,9 @@ namespace guitar
     // its pick. So each take's pick is found (Take::pickOf, the suite's own measure) and playback starts so it lands
     // exactly this long after the note-on. takeStartSeconds is left for takes whose pick can't be found.
     inline constexpr double pickLandSeconds = 0.0054;
+    // 0.7.4: the reference's Unpitched Release window at factory settings (the owner's screenshot): it plays on a note let
+    // go 51 to 1173 ms after it started.
+    inline constexpr double unpitchedFromSeconds = 0.051, unpitchedToSeconds = 1.173;
 
     class Guitar
     {
@@ -180,7 +183,6 @@ namespace guitar
         std::array<NoiseVoice, maxNoiseVoices> noiseVoices {};
         juce::int64 blockStart = 0, eventTime = 0;     // 0.6.0: samples since prepare (the block's start, the event's)
         int releaseTurn = 0, unpitchedTurn = 0, fretTurn = 0;
-        bool lastHadScrape = false;
         juce::Random noiseRandom { 0x6e6f };
         NoisePlayed lastNoisePlayed;
         std::atomic<int> activeNoises { 0 };

@@ -200,7 +200,8 @@ namespace guitar::noises
                 *progress = 0.7f * (float) (i + 1) / (float) all.size();
         }
 
-        // CHECKED: releases and fret noise should be there for most hits; unpitched noises only now and then.
+        // CHECKED: releases and fret noise should be there for most hits (0.7.4: unpitched noises too: the reference plays
+        // its Unpitched Release on every note let go 51-1173 ms after it started, and the list's notes are held 0.5 s).
         const auto heard = (int) cuts.size();
         if ((list == List::pitchedRelease || list == List::powerChordRelease || list == List::fretNoise) && heard < report.hits / 2)
         {
@@ -208,11 +209,33 @@ namespace guitar::noises
                          + " on in your guitar instrument" + (list == List::fretNoise ? "" : " (Pitched Release's Volume up)") + "?";
             return report;
         }
-        if (list == List::unpitched && heard > report.hits / 2)
+        if (list == List::unpitched && heard < report.hits / 2)
         {
-            report.error = juce::String (heard) + " of " + juce::String (report.hits) + " notes have a noise, but the unpitched ones only come now "
-                           "and then: turn Pitched Release's Volume all the way down too, and render it again.";
+            report.error = juce::String (report.silent) + " of " + juce::String (report.hits) + " hits have no noise: is Unpitched Release's "
+                           "Volume up in your guitar instrument?";
             return report;
+        }
+        // 0.7.4: a scrape has no pitch; if most of them sound at their note's pitch, Pitched Release was left on.
+        if (list == List::unpitched)
+        {
+            auto pitched = 0, measured = 0;
+            const auto from = toSample (preSeconds + 0.01);
+            for (const auto& cut : cuts)
+            {
+                const auto expected = frequencyOf (cut.hit->note);
+                const auto n = (int) cut.samples.size() - from;
+                if (n <= 0)
+                    continue;
+                ++measured;
+                if (const auto hz = renders::pitchOf (cut.samples.data() + from, n, rate, expected); hz > 0.0 && std::abs (1200.0 * std::log2 (hz / expected)) <= 50.0)
+                    ++pitched;
+            }
+            if (measured > 0 && pitched > measured * 6 / 10)
+            {
+                report.error = juce::String (pitched) + " of " + juce::String (measured) + " noises are at their note's pitch: turn Pitched Release's "
+                               "Volume all the way down too (and Sustain's), and render it again.";
+                return report;
+            }
         }
 
         // The right string's? Pitched releases sound at their note's pitch (the owner's noise check: the low A's at ~55 Hz,

@@ -224,7 +224,7 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
                     "The finger leaving the string at each note-off (imported from the noise lists): its level. Fuller on notes held "
                     "up to a second, none after two; palm mutes have none. Off at the bottom"),
       scrapes (p.getParameters(), ParamIDs::scrapes, "SCRAPES",
-               "How often a release has an unpitched scrape mixed in (your guitar instrument: about 1 in 8)"),
+               "How often a let-go note has its unpitched scrape (the finger leaving the string), on notes held 0.05 to 1.2 s as your guitar instrument does. 100%: every time, its way"),
       fretNoise (p.getParameters(), ParamIDs::fretNoise, "FRET NOISE",
                  "The level of the fret noise F#0 plays (its velocity sets how loud too). Off at the bottom")
 {

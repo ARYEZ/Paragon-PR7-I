@@ -1,4 +1,5 @@
 #include "Rig.h"
+#include <tuple>
 
 #include "Parameters.h"
 
@@ -10,7 +11,7 @@ namespace
     // Which plugin version's parameters the preset was saved with, for the occasional parameter whose default changes
     // (older plugins ignore it). PR7-I counts afresh: 1 = PR7-I 0.2.0 (the guitar's parameters) and 0.2.1;
     // 2 = 0.2.2 (VARIATION off by default: 0.2.1's 50% was never chosen, so older presets load with it off).
-    constexpr int parameterVersion = 2;
+    constexpr int parameterVersion = 3;   // 3: PR7-I 0.7.4 (RELEASE and SCRAPES' old defaults moved: fromXml)
     const juce::Identifier rigTag { "ParagonRig" };
     const juce::Identifier parameterTag { "Param" };
 }
@@ -72,5 +73,10 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
 
     if (xml.getIntAttribute ("parameterVersion", 1) < 2)
         rig.parameters[ParamIDs::variation] = 0.0f;
+    if (xml.getIntAttribute ("parameterVersion", 1) < 3)
+        for (const auto& [id, oldDefault, newDefault] : { std::tuple { juce::String (ParamIDs::release), 0.08f, 0.04f },
+                                                          std::tuple { juce::String (ParamIDs::scrapes), 0.12f, 1.0f } })
+            if (auto it = rig.parameters.find (id); it != rig.parameters.end() && std::abs (it->second - oldDefault) < 1.0e-4f)
+                it->second = newDefault;
     return rig;
 }

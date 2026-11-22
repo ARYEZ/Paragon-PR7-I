@@ -61,7 +61,7 @@ namespace
     // turn (the rest copies); `everyNth`: only every nth hit has a noise (the unpitched list's now and then), each a
     // different burst of noise, `recordings` of them in turn; `notesHeard`: the notes too (a render made the wrong way).
     std::vector<float> fakeNoiseRender (noises::List list, int string, double rate, double late, int recordings, int everyNth = 1,
-                                        bool notesHeard = false)
+                                        bool notesHeard = false, bool unpitchedAtPitch = false)
     {
         using namespace noises;
         std::vector<float> audio ((size_t) (lengthSeconds (list, string) * rate), 0.0f);
@@ -79,7 +79,8 @@ namespace
                 continue;
             const auto start = (list == List::fretNoise ? h.noteSeconds : h.offSeconds) + late;
             juce::Random random (100 + which);
-            const auto hz = list == List::fretNoise || list == List::unpitched ? 0.0 : guitar::frequencyOf (h.note) * (1.0 + 0.002 * which);
+            const auto hz = list == List::fretNoise || (list == List::unpitched && ! unpitchedAtPitch) ? 0.0
+                                                                                                       : guitar::frequencyOf (h.note) * (1.0 + 0.002 * which);
             for (int i = 0; i < (int) (0.3 * rate); ++i)
             {
                 const auto envelope = std::exp (-(double) i / (0.05 * rate));
@@ -674,16 +675,21 @@ TEST_CASE ("THE NOISE IMPORT 0.6.0: releases cut at their note-offs, copies left
     // Unpitched: a noise on every 8th hit, 6 different ones in turn: the 6 kept, in the order they came.
     {
         const auto folder = tempGuitar ("NoiseUnpitched");
-        const auto audio = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 8);
+        // 0.7.4: a scrape on every hit (the reference plays one on every note let go 51-1173 ms after it started), 6
+        // different ones in turn: the 6 kept.
+        const auto audio = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 1);
         const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::unpitched, 0, folder);
         INFO (report.error);
         REQUIRE (report.ok());
         CHECK (report.written == 6);
-        CHECK (report.silent == 336 - 42);
+        CHECK (report.silent == 0);
         CHECK (Library::load (folder)->noiseCount (List::unpitched) == 6);
-        // ...but a noise on every hit means the pitched releases weren't turned down: refused.
-        const auto wrong = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 1);
+        // ...but noises at their notes' pitches mean the pitched releases weren't turned down: refused.
+        const auto wrong = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 1, false, true);
         CHECK (importAudio (wrong.data(), (int) wrong.size(), rate, List::unpitched, 0, tempGuitar ("NoiseUnpitchedWrong")).error.contains ("Pitched Release"));
+        // ...and mostly silence: Unpitched Release's Volume down.
+        const auto none = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 8);
+        CHECK (importAudio (none.data(), (int) none.size(), rate, List::unpitched, 0, tempGuitar ("NoiseUnpitchedNone")).error.contains ("no noise"));
     }
 
     // Fret noise: 13 recordings in turn over 32 hits: the 13 kept, numbered in turn (the first one played first).
@@ -840,21 +846,37 @@ TEST_CASE ("THE NOISES 0.6.0: a release at each note-off, by how long the note w
         CHECK (z.guitar.lastNoise().count == 0);
     }
 
-    SECTION ("SCRAPES: an unpitched noise with a release now and then, the next in turn, never two releases running")
+    SECTION ("0.7.4, SCRAPES: an unpitched noise on every note let go 51-1173 ms after it started, the next in turn")
     {
         const auto u1 = noiseTake (700.0), u2 = noiseTake (900.0);
+        const auto scrapeAfter = [&] (double held, bool withRelease = true)
+        {
+            Player p;
+            if (withRelease)
+                p.library->addNoise (List::pitchedRelease, 0, 0, release);
+            p.library->addNoise (List::unpitched, 0, 0, u1);
+            p.library->addNoise (List::unpitched, 0, 0, u2);
+            p.play (held + 0.1, { { Player::on (33), 0 }, { Player::off (33), (int) (held * sampleRate) } });
+            return p.guitar.lastNoise().take;
+        };
+        CHECK (scrapeAfter (0.2) == u1.get());          // (played after the pitched release)
+        CHECK (scrapeAfter (1.1) == u1.get());
+        CHECK (scrapeAfter (1.3) != u1.get());          // past the window: none
+        CHECK (scrapeAfter (0.03) != u1.get());         // too short: none
+        CHECK (scrapeAfter (0.2, false) == u1.get());   // with or without a pitched release
+        // in turn, every note (SCRAPES 100%, the default)
         Player p;
-        p.library->addNoise (List::pitchedRelease, 0, 0, release);
+        CHECK (p.settings.scrapes == 1.0f);
         p.library->addNoise (List::unpitched, 0, 0, u1);
         p.library->addNoise (List::unpitched, 0, 0, u2);
-        p.settings.scrapes = 1.0f;   // every time it may
         std::vector<const Take*> last;
         for (int i = 0; i < 4; ++i)
         {
             p.play (0.3, { { Player::on (33), 0 }, { Player::off (33), (int) (0.2 * sampleRate) } });
             last.push_back (p.guitar.lastNoise().take);
         }
-        CHECK (last == std::vector<const Take*> { u1.get(), release.get(), u2.get(), release.get() });
+        CHECK (last == std::vector<const Take*> { u1.get(), u2.get(), u1.get(), u2.get() });
+        // SCRAPES 0: none
         Player none;
         none.library->addNoise (List::pitchedRelease, 0, 0, release);
         none.library->addNoise (List::unpitched, 0, 0, u1);

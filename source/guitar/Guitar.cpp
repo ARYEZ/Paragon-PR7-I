@@ -575,18 +575,22 @@ namespace guitar
                 played = true;
             }
         }
-        if (! played)
-            return;
-        ++releaseTurn;
-        // Now and then an unpitched noise with it (never two releases running).
-        const auto scrape = ! lastHadScrape && s.scrapes > 0.0f && noiseRandom.nextFloat() < s.scrapes;
-        lastHadScrape = false;
-        if (scrape)
+        if (played)
+            ++releaseTurn;
+        // 0.7.4: the UNPITCHED release (a scrape) on every note let go between unpitchedFromSeconds and unpitchedToSeconds
+        // after it started (the owner's screenshot of the reference's Unpitched Release at factory settings: "plays if note
+        // ends after 51 to 1173 ms"), its recordings in turn, whether or not a pitched release played. SCRAPES is the
+        // chance of it (100% by default: the reference's way; 0.6.0 guessed "now and then", 12%, never two running).
+        auto heldFor = -1.0;
+        for (const auto& v : voices)
+            if (lettingGo (v))
+                heldFor = juce::jmax (heldFor, (double) (eventTime - v.started) / rate);
+        if (heldFor >= unpitchedFromSeconds && heldFor <= unpitchedToSeconds && s.scrapes > 0.0f
+            && (s.scrapes >= 1.0f || noiseRandom.nextFloat() < s.scrapes))
             if (const auto* take = library->unpitched (unpitchedTurn))
             {
                 ++unpitchedTurn;
                 playNoise (take, s.releaseNoise, 1.0);
-                lastHadScrape = true;
             }
     }
 }
